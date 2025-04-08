@@ -1,9 +1,9 @@
-import random
 from flask import Flask, request, jsonify
+import random
 
 app = Flask(__name__)
 
-# Exercise data
+# Calorie-burning exercises and muscle-gaining exercises
 calorie_burn_exercises = {
     "Jump Rope": 12,
     "Burpees": 10,
@@ -30,8 +30,8 @@ muscle_gain_exercises = {
     "Leg Raises": "Core"
 }
 
-
-def generate_workout(calories, duration, muscle_gain):
+# Function to generate workout
+def generate_workout(calories, duration, calorie_burn_exercises, muscle_gain_exercises, muscle_gain):
     workout_plan = []
     total_calories = 0
     total_time = 0
@@ -49,7 +49,7 @@ def generate_workout(calories, duration, muscle_gain):
             total_calories += calories_burned
             total_time += time_for_exercise
 
-        if total_time < duration and workout_plan:
+        if total_time < duration:
             last_entry = workout_plan.pop()
             updated_time = time_for_exercise + (duration - total_time)
             updated_calories = (calories / duration) * updated_time
@@ -60,49 +60,26 @@ def generate_workout(calories, duration, muscle_gain):
     return workout_plan
 
 
-def modify_workout(plan, remove_exercise, replace_exercise, muscle_gain):
-    modified = []
-    for item in plan:
-        if remove_exercise and remove_exercise in item:
-            if replace_exercise:
-                new_exercise = replace_exercise
-            else:
-                new_exercise = random.choice(
-                    list(muscle_gain_exercises if muscle_gain else calorie_burn_exercises))
-            item = item.replace(remove_exercise, new_exercise)
-        modified.append(item)
-    return modified
+@app.route('/generate_workout', methods=['POST'])
+def workout():
+    try:
+        # Get JSON from the request
+        data = request.get_json()
+
+        user_input = data.get('message', '')
+
+        # Parse the user input (You can adjust this as needed)
+        calories = 300  # Example, you can parse this from the message
+        duration = 30   # Example, you can parse this from the message
+        muscle_gain = "muscle" in user_input.lower()
+
+        # Generate the workout plan
+        workout_plan = generate_workout(calories, duration, calorie_burn_exercises, muscle_gain_exercises, muscle_gain)
+
+        return jsonify({"workout_plan": workout_plan}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
-@app.route("/generate", methods=["POST"])
-def generate():
-    data = request.get_json()
-
-    calories = data.get("calories")
-    duration = data.get("duration")
-    muscle_gain = data.get("muscle_gain", False)
-    remove_exercise = data.get("remove_exercise")
-    replace_exercise = data.get("replace_exercise")
-
-    if not duration or (not muscle_gain and not calories):
-        return jsonify({"error": "Please provide duration and either calories or muscle_gain flag."}), 400
-
-    workout = generate_workout(calories, duration, muscle_gain)
-
-    if remove_exercise:
-        workout = modify_workout(
-            workout, remove_exercise, replace_exercise, muscle_gain
-        )
-
-    return jsonify({
-        "workout_plan": workout
-    })
-
-
-@app.route("/", methods=["GET"])
-def home():
-    return "Workout AI API is running!"
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+if __name__ == '__main__':
+    app.run(debug=True)
