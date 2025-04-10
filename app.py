@@ -141,5 +141,5 @@ def modify():
 
 # --- Required for Render ---
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))  # <- This line is critical
+    port = int(os.environ.get("PORT", 8080))  # <- This line is critical
     app.run(host="0.0.0.0", port=port)        # <- So is this
