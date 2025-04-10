@@ -1,8 +1,41 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
+import logging
 import random
 import re
+import uuid
 
 app = Flask(__name__)
+CORS(app)
+
+logging.basicConfig(level=logging.INFO)
+
+# Define exercises for calorie burn and muscle gain
+calorie_burn_exercises = {
+    "Jump Rope": 12,
+    "Burpees": 10,
+    "Jumping Jacks": 8,
+    "Mountain Climbers": 11,
+    "High Knees": 10,
+    "Running in Place": 9,
+    "Cycling (Stationary)": 10,
+    "Rowing Machine": 9,
+    "Box Jumps": 12,
+    "Shadow Boxing": 8
+}
+
+muscle_gain_exercises = {
+    "Squats": "Legs",
+    "Push-ups": "Chest & Arms",
+    "Lunges": "Legs & Glutes",
+    "Plank": "Core",
+    "Deadlifts": "Back & Legs",
+    "Bench Press": "Chest & Arms",
+    "Pull-ups": "Back & Biceps",
+    "Dips": "Triceps & Shoulders",
+    "Russian Twists": "Core",
+    "Leg Raises": "Core"
+}
 
 # --- Spell Correction ---
 def correct_spelling(input_str):
@@ -31,23 +64,23 @@ def parse_user_input(user_input):
             if "calorie" in words[i + 1]:
                 calories = int(words[i])
                 if calories > 1500:
-                    return None, None, None, None, None
+                    return None, None, None, None, None, "Warning: Calorie input exceeds safe limits (1,500 calories). Please adjust your request."
             elif "minute" in words[i + 1] or "hour" in words[i + 1] or "hours" in words[i + 1]:
                 duration = int(words[i])
                 if duration > 120:
-                    return None, None, None, None, None
+                    return None, None, None, None, None, "Warning: Duration exceeds safe limits (120 minutes). Please adjust your request."
         elif words[i] == "remove" and i + 1 < len(words):
             remove_exercise = words[i + 1].capitalize()
         elif words[i] == "replace" and i + 1 < len(words):
             replace_exercise = words[i + 1].capitalize()
 
     if muscle_gain and duration is not None:
-        return None, duration, muscle_gain, remove_exercise, replace_exercise
+        return None, duration, muscle_gain, remove_exercise, replace_exercise, None
 
     if calories is None or duration is None:
-        return None, None, None, None, None
+        return None, None, None, None, None, "Missing required information (calories, duration)."
 
-    return calories, duration, muscle_gain, remove_exercise, replace_exercise
+    return calories, duration, muscle_gain, remove_exercise, replace_exercise, None
 
 # --- Generate Workout ---
 def generate_workout(calories, duration, calorie_burn_exercises, muscle_gain_exercises, muscle_gain):
@@ -90,92 +123,47 @@ def modify_workout(workout_plan, remove_exercise, replace_exercise, calorie_burn
         modified_plan.append(exercise)
     return modified_plan
 
-# --- API Endpoints ---
-
 @app.route('/generate_workout', methods=['POST'])
-def api_generate_workout():
+def generate_workout_api():
+    request_id = str(uuid.uuid4())
     data = request.get_json()
-    user_input = data.get('user_input', '')
 
-    calories, duration, muscle_gain, remove_exercise, replace_exercise = parse_user_input(user_input)
+    logging.info(f"[{request_id}] Received /generate_workout: {data}")
+
+    if not data or 'goal' not in data or 'calories' not in data or 'duration' not in data:
+        error_msg = "Missing 'goal', 'calories', or 'duration' in request"
+        logging.error(f"[{request_id}] {error_msg}")
+        return jsonify({"error": error_msg, "request_id": request_id}), 400
+
+    goal = data.get("goal", "").strip().lower()
+    calories = data['calories']
+    duration = data['duration']
+
+    muscle_gain = "muscle" in goal
+    remove_exercise = data.get("remove_exercise")
+    replace_exercise = data.get("replace_exercise")
+
+    # Parse input and validate
+    calories, duration, muscle_gain, remove_exercise, replace_exercise, validation_error = parse_user_input(f"goal {goal} calories {calories} duration {duration}")
     
-    if (calories is None and not muscle_gain) or duration is None:
-        return jsonify({"error": "Invalid input. Please provide a valid workout goal."}), 400
+    if validation_error:
+        return jsonify({"error": validation_error, "request_id": request_id}), 400
 
-    calorie_burn_exercises = {
-        "Jump Rope": 12,
-        "Burpees": 10,
-        "Jumping Jacks": 8,
-        "Mountain Climbers": 11,
-        "High Knees": 10,
-        "Running in Place": 9,
-        "Cycling (Stationary)": 10,
-        "Rowing Machine": 9,
-        "Box Jumps": 12,
-        "Shadow Boxing": 8
-    }
-
-    muscle_gain_exercises = {
-        "Squats": "Legs",
-        "Push-ups": "Chest & Arms",
-        "Lunges": "Legs & Glutes",
-        "Plank": "Core",
-        "Deadlifts": "Back & Legs",
-        "Bench Press": "Chest & Arms",
-        "Pull-ups": "Back & Biceps",
-        "Dips": "Triceps & Shoulders",
-        "Russian Twists": "Core",
-        "Leg Raises": "Core"
-    }
-
+    # Generate the workout plan
     workout_plan = generate_workout(calories, duration, calorie_burn_exercises, muscle_gain_exercises, muscle_gain)
 
-    return jsonify({"workout_plan": workout_plan}), 200
+    # If modification is required
+    if remove_exercise or replace_exercise:
+        workout_plan = modify_workout(workout_plan, remove_exercise, replace_exercise, calorie_burn_exercises, muscle_gain_exercises)
 
-@app.route('/modify_workout', methods=['POST'])
-def api_modify_workout():
-    data = request.get_json()
-    user_input = data.get('user_input', '')
-    current_plan = data.get('current_plan', [])
+    logging.info(f"[{request_id}] Generated workout plan: {workout_plan}")
+    return jsonify({"workout_plan": workout_plan, "request_id": request_id})
 
-    calories, duration, muscle_gain, remove_exercise, replace_exercise = parse_user_input(user_input)
-
-    if not current_plan:
-        return jsonify({"error": "Current plan is required to modify workout."}), 400
-
-    calorie_burn_exercises = {
-        "Jump Rope": 12,
-        "Burpees": 10,
-        "Jumping Jacks": 8,
-        "Mountain Climbers": 11,
-        "High Knees": 10,
-        "Running in Place": 9,
-        "Cycling (Stationary)": 10,
-        "Rowing Machine": 9,
-        "Box Jumps": 12,
-        "Shadow Boxing": 8
-    }
-
-    muscle_gain_exercises = {
-        "Squats": "Legs",
-        "Push-ups": "Chest & Arms",
-        "Lunges": "Legs & Glutes",
-        "Plank": "Core",
-        "Deadlifts": "Back & Legs",
-        "Bench Press": "Chest & Arms",
-        "Pull-ups": "Back & Biceps",
-        "Dips": "Triceps & Shoulders",
-        "Russian Twists": "Core",
-        "Leg Raises": "Core"
-    }
-
-    modified_plan = modify_workout(current_plan, remove_exercise, replace_exercise, calorie_burn_exercises, muscle_gain_exercises)
-
-    return jsonify({"modified_plan": modified_plan}), 200
 
 @app.route('/', methods=['GET'])
 def index():
-    return "Workout Generator API is running ✅"
+    return "CodeFit Backend is running ✅"
+
 
 if __name__ == '__main__':
     app.run(debug=True)
