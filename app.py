@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 import random
 import re
-import os  # Needed for setting the port dynamically
+import os
 
 app = Flask(__name__)
 
@@ -64,12 +64,15 @@ def parse_user_input(user_input):
                 if duration > 120:
                     return {"error": "Duration exceeds safe limits (120 minutes)."}
         elif words[i] == "remove" and i + 1 < len(words):
-            remove_exercise = words[i + 1].capitalize()
+            remove_exercise = ' '.join(words[i + 1:i + 3]).title().strip()  # Try two-word names
         elif words[i] == "replace" and i + 1 < len(words):
-            replace_exercise = words[i + 1].capitalize()
+            replace_exercise = ' '.join(words[i + 1:i + 3]).title().strip()
 
     if muscle_gain and duration is not None:
         return {"duration": duration, "muscle_gain": True, "remove": remove_exercise, "replace": replace_exercise}
+
+    if calories is None and duration is None and remove_exercise:
+        return {"remove": remove_exercise, "replace": replace_exercise}
 
     if calories is None or duration is None:
         return {"error": "Please specify both calories and duration."}
@@ -98,9 +101,9 @@ def generate_workout(calories, duration, calorie_ex, muscle_ex, muscle_goal=Fals
 def modify_workout(workout_plan, remove_exercise, replace_exercise, calorie_ex, muscle_ex):
     modified = []
     for exercise in workout_plan:
-        if remove_exercise and remove_exercise in exercise:
+        if remove_exercise and remove_exercise.lower() in exercise.lower():
             new_ex = replace_exercise if replace_exercise else random.choice(list(calorie_ex.keys()))
-            exercise = exercise.replace(remove_exercise, new_ex)
+            exercise = re.sub(remove_exercise, new_ex, exercise, flags=re.IGNORECASE)
         modified.append(exercise)
     return modified
 
@@ -121,12 +124,14 @@ def generate():
     )
     return jsonify({"workout_plan": workout})
 
+
 @app.route("/modify_workout", methods=["POST"])
 def modify():
     data = request.get_json()
     workout_plan = data.get("workout_plan", [])
     mod_request = data.get("modification", "")
     parsed = parse_user_input(mod_request)
+
     if not parsed.get("remove"):
         return jsonify({"error": "Please specify an exercise to remove."}), 400
 
@@ -139,7 +144,7 @@ def modify():
     )
     return jsonify({"modified_workout_plan": modified})
 
-# --- Required for Render ---
+# --- Render compatibility ---
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))  # <- This line is critical
-    app.run(host="0.0.0.0", port=port)        # <- So is this
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
