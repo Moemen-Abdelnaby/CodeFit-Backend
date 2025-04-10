@@ -1,150 +1,110 @@
 from flask import Flask, request, jsonify
-import random
+from flask_cors import CORS
+import logging
 import re
-import os
+import uuid
 
 app = Flask(__name__)
+CORS(app)
 
-# --- Static exercise data ---
-calorie_burn_exercises = {
-    "Jump Rope": 12,
-    "Burpees": 10,
-    "Jumping Jacks": 8,
-    "Mountain Climbers": 11,
-    "High Knees": 10,
-    "Running in Place": 9,
-    "Cycling (Stationary)": 10,
-    "Rowing Machine": 9,
-    "Box Jumps": 12,
-    "Shadow Boxing": 8
+logging.basicConfig(level=logging.INFO)
+
+GOAL_WORKOUTS = {
+    "lose weight": [
+        "Jump rope - 10 minutes",
+        "HIIT circuit - 20 minutes",
+        "Running - 30 minutes",
+        "Mountain climbers - 3 sets of 20"
+    ],
+    "build muscle": [
+        "Bench press - 4 sets of 8",
+        "Squats - 4 sets of 10",
+        "Deadlift - 3 sets of 6",
+        "Pull-ups - 3 sets of 8"
+    ],
+    "gain weight": [
+        "Pushups - 4 sets of 15",
+        "Dumbbell rows - 3 sets of 10",
+        "Barbell squats - 4 sets of 8",
+        "Overhead press - 3 sets of 10"
+    ],
+    "calorie burn": [
+        "Cycling - 30 minutes",
+        "Jump rope - 15 minutes",
+        "Burpees - 3 sets of 15",
+        "Rowing - 20 minutes"
+    ]
 }
 
-muscle_gain_exercises = {
-    "Squats": "Legs",
-    "Push-ups": "Chest & Arms",
-    "Lunges": "Legs & Glutes",
-    "Plank": "Core",
-    "Deadlifts": "Back & Legs",
-    "Bench Press": "Chest & Arms",
-    "Pull-ups": "Back & Biceps",
-    "Dips": "Triceps & Shoulders",
-    "Russian Twists": "Core",
-    "Leg Raises": "Core"
-}
+def normalize_goal(raw_goal):
+    raw_goal = raw_goal.lower()
+    if re.search(r'\bcalori(e|es)?\b', raw_goal):
+        return "calorie burn"
+    elif "muscle" in raw_goal:
+        return "build muscle"
+    elif "lose" in raw_goal and "weight" in raw_goal:
+        return "lose weight"
+    elif "gain" in raw_goal and "weight" in raw_goal:
+        return "gain weight"
+    return raw_goal.strip()
 
-# --- Utility functions ---
-def correct_spelling(input_str):
-    corrections = {
-        "calori": "calorie",
-        "minut": "minute",
-        "hour": "hour",
-        "hours": "hours"
-    }
-    for wrong, correct in corrections.items():
-        input_str = re.sub(rf'\b{wrong}\b', correct, input_str, flags=re.IGNORECASE)
-    return input_str
-
-def parse_user_input(user_input):
-    user_input = correct_spelling(user_input.lower())
-    words = user_input.split()
-    calories = None
-    duration = None
-    muscle_gain = "muscle" in words
-    remove_exercise = None
-    replace_exercise = None
-
-    for i in range(len(words) - 1):
-        if words[i].isdigit():
-            if "calorie" in words[i + 1]:
-                calories = int(words[i])
-                if calories > 1500:
-                    return {"error": "Calorie input exceeds safe limits (1,500)."}
-            elif "minute" in words[i + 1] or "hour" in words[i + 1] or "hours" in words[i + 1]:
-                duration = int(words[i])
-                if duration > 120:
-                    return {"error": "Duration exceeds safe limits (120 minutes)."}
-        elif words[i] == "remove" and i + 1 < len(words):
-            remove_exercise = ' '.join(words[i + 1:i + 3]).title().strip()  # Try two-word names
-        elif words[i] == "replace" and i + 1 < len(words):
-            replace_exercise = ' '.join(words[i + 1:i + 3]).title().strip()
-
-    if muscle_gain and duration is not None:
-        return {"duration": duration, "muscle_gain": True, "remove": remove_exercise, "replace": replace_exercise}
-
-    if calories is None and duration is None and remove_exercise:
-        return {"remove": remove_exercise, "replace": replace_exercise}
-
-    if calories is None or duration is None:
-        return {"error": "Please specify both calories and duration."}
-
-    return {
-        "calories": calories,
-        "duration": duration,
-        "muscle_gain": muscle_gain,
-        "remove": remove_exercise,
-        "replace": replace_exercise
-    }
-
-def generate_workout(calories, duration, calorie_ex, muscle_ex, muscle_goal=False):
-    workout_plan = []
-    time_per_exercise = duration // 6
-
-    if muscle_goal:
-        selected = random.sample(list(muscle_ex.keys()), 6)
-        workout_plan = [f"{ex} — {time_per_exercise} minutes" for ex in selected]
-    else:
-        selected = random.sample(list(calorie_ex.items()), 6)
-        workout_plan = [f"{ex} — {time_per_exercise} minutes (~{int(cal * time_per_exercise)} calories)" for ex, cal in selected]
-
-    return workout_plan
-
-def modify_workout(workout_plan, remove_exercise, replace_exercise, calorie_ex, muscle_ex):
-    modified = []
-    for exercise in workout_plan:
-        if remove_exercise and remove_exercise.lower() in exercise.lower():
-            new_ex = replace_exercise if replace_exercise else random.choice(list(calorie_ex.keys()))
-            exercise = re.sub(remove_exercise, new_ex, exercise, flags=re.IGNORECASE)
-        modified.append(exercise)
-    return modified
-
-# --- API Endpoints ---
-@app.route("/generate_workout", methods=["POST"])
-def generate():
+@app.route('/generate_workout', methods=['POST'])
+def generate_workout():
+    request_id = str(uuid.uuid4())
     data = request.get_json()
-    parsed = parse_user_input(data.get("goal", ""))
-    if "error" in parsed:
-        return jsonify({"error": parsed["error"]}), 400
 
-    workout = generate_workout(
-        parsed.get("calories", 0),
-        parsed["duration"],
-        calorie_burn_exercises,
-        muscle_gain_exercises,
-        parsed.get("muscle_gain", False)
-    )
-    return jsonify({"workout_plan": workout})
+    logging.info(f"[{request_id}] Received /generate_workout: {data}")
+
+    if not data or 'goal' not in data:
+        error_msg = "Missing 'goal' in request"
+        logging.error(f"[{request_id}] {error_msg}")
+        return jsonify({"error": error_msg, "request_id": request_id}), 400
+
+    goal = normalize_goal(data['goal'])
+
+    if goal not in GOAL_WORKOUTS:
+        error_msg = f"Unknown goal: {goal}"
+        logging.warning(f"[{request_id}] {error_msg}")
+        return jsonify({"error": error_msg, "request_id": request_id}), 400
+
+    logging.info(f"[{request_id}] Generating plan for: {goal}")
+    return jsonify({"workout_plan": GOAL_WORKOUTS[goal], "request_id": request_id})
 
 
-@app.route("/modify_workout", methods=["POST"])
-def modify():
+@app.route('/modify_workout', methods=['POST'])
+def modify_workout():
+    request_id = str(uuid.uuid4())
     data = request.get_json()
-    workout_plan = data.get("workout_plan", [])
-    mod_request = data.get("modification", "")
-    parsed = parse_user_input(mod_request)
+    logging.info(f"[{request_id}] Received /modify_workout: {data}")
 
-    if not parsed.get("remove"):
-        return jsonify({"error": "Please specify an exercise to remove."}), 400
+    if not data or 'modification' not in data or 'current_plan' not in data:
+        error_msg = "Missing 'modification' or 'current_plan'"
+        logging.error(f"[{request_id}] {error_msg}")
+        return jsonify({"error": error_msg, "request_id": request_id}), 400
 
-    modified = modify_workout(
-        workout_plan,
-        parsed["remove"],
-        parsed.get("replace"),
-        calorie_burn_exercises,
-        muscle_gain_exercises
-    )
-    return jsonify({"modified_workout_plan": modified})
+    mod = data['modification'].strip().lower()
+    current_plan = data['current_plan']
 
-# --- Render compatibility ---
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
+    if not isinstance(current_plan, list) or not all(isinstance(item, str) for item in current_plan):
+        error_msg = "Invalid 'current_plan' format. Must be a list of strings."
+        logging.error(f"[{request_id}] {error_msg}")
+        return jsonify({"error": error_msg, "request_id": request_id}), 400
+
+    # Apply basic modifications
+    if "add" in mod and "cardio" in mod:
+        current_plan.append("Cardio blast - 20 minutes")
+    elif "replace" in mod and "squats" in mod:
+        current_plan = [item.replace("Squats", "Lunges") for item in current_plan]
+    elif "remove" in mod and "deadlift" in mod:
+        current_plan = [item for item in current_plan if "Deadlift" not in item]
+
+    logging.info(f"[{request_id}] Modified plan: {current_plan}")
+    return jsonify({"modified_plan": current_plan, "request_id": request_id})
+
+
+@app.route('/', methods=['GET'])
+def index():
+    return "CodeFit Backend is running ✅"
+
+if __name__ == '__main__':
+    app.run(debug=True)
