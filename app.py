@@ -8,7 +8,9 @@ import uuid
 app = Flask(__name__)
 CORS(app)
 
-logging.basicConfig(level=logging.INFO)
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)  # Use DEBUG for detailed logs
+logger = logging.getLogger(__name__)
 
 # Define exercises for calorie burn and muscle gain
 calorie_burn_exercises = {
@@ -128,16 +130,18 @@ def generate_workout_api():
     request_id = str(uuid.uuid4())
     data = request.get_json()
 
-    logging.info(f"[{request_id}] Received /generate_workout: {data}")
+    logger.debug(f"[{request_id}] Received /generate_workout: {data}")
 
     if not data or 'goal' not in data or 'calories' not in data or 'duration' not in data:
         error_msg = "Missing 'goal', 'calories', or 'duration' in request"
-        logging.error(f"[{request_id}] {error_msg}")
+        logger.error(f"[{request_id}] {error_msg}")
         return jsonify({"error": error_msg, "request_id": request_id}), 400
 
     goal = data.get("goal", "").strip().lower()
     calories = data['calories']
     duration = data['duration']
+
+    logger.debug(f"[{request_id}] Parsed input - Goal: {goal}, Calories: {calories}, Duration: {duration}")
 
     muscle_gain = "muscle" in goal
     remove_exercise = data.get("remove_exercise")
@@ -147,16 +151,19 @@ def generate_workout_api():
     calories, duration, muscle_gain, remove_exercise, replace_exercise, validation_error = parse_user_input(f"goal {goal} calories {calories} duration {duration}")
     
     if validation_error:
+        logger.error(f"[{request_id}] Validation error: {validation_error}")
         return jsonify({"error": validation_error, "request_id": request_id}), 400
 
     # Generate the workout plan
     workout_plan = generate_workout(calories, duration, calorie_burn_exercises, muscle_gain_exercises, muscle_gain)
 
+    logger.debug(f"[{request_id}] Generated workout plan: {workout_plan}")
+
     # If modification is required
     if remove_exercise or replace_exercise:
         workout_plan = modify_workout(workout_plan, remove_exercise, replace_exercise, calorie_burn_exercises, muscle_gain_exercises)
+        logger.debug(f"[{request_id}] Modified workout plan: {workout_plan}")
 
-    logging.info(f"[{request_id}] Generated workout plan: {workout_plan}")
     return jsonify({"workout_plan": workout_plan, "request_id": request_id})
 
 
