@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import random
 import re
+import os  # Needed for setting the port dynamically
 
 app = Flask(__name__)
 
@@ -120,7 +121,6 @@ def generate():
     )
     return jsonify({"workout_plan": workout})
 
-
 @app.route("/modify_workout", methods=["POST"])
 def modify():
     data = request.get_json()
@@ -139,6 +139,7 @@ def modify():
     )
     return jsonify({"modified_workout_plan": modified})
 
-# Run locally
+# --- Required for Render ---
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))  # <- This line is critical
+    app.run(host="0.0.0.0", port=port)        # <- So is this
