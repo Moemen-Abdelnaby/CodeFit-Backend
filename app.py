@@ -64,20 +64,34 @@ def parse_user_input(user_input):
     remove_exercise = None
     replace_exercise = None
 
-    for i in range(len(words) - 1):
+    for i in range(len(words)):
         if words[i].isdigit():
-            if "calorie" in words[i + 1]:
+            if i + 1 < len(words) and "calorie" in words[i + 1]:
                 calories = int(words[i])
                 if calories > 1500:
                     return None, None, None, None, None, "Warning: Calorie input exceeds safe limits (1,500 calories)."
-            elif "minute" in words[i + 1] or "hour" in words[i + 1] or "hours" in words[i + 1]:
+            elif i + 1 < len(words) and any(k in words[i + 1] for k in ["minute", "hour", "hours"]):
                 duration = int(words[i])
                 if duration > 120:
                     return None, None, None, None, None, "Warning: Duration exceeds safe limits (120 minutes)."
-        elif words[i] == "remove" and i + 1 < len(words):
-            remove_exercise = words[i + 1].capitalize()
-        elif words[i] == "replace" and i + 1 < len(words):
-            replace_exercise = words[i + 1].capitalize()
+
+        elif words[i] == "remove":
+            remove_words = []
+            for j in range(i + 1, len(words)):
+                if words[j] in ["replace", "with", "and"]:
+                    break
+                remove_words.append(words[j])
+            if remove_words:
+                remove_exercise = " ".join(remove_words).title()
+
+        elif words[i] == "replace":
+            replace_words = []
+            for j in range(i + 1, len(words)):
+                if words[j] in ["with", "remove", "and"]:
+                    break
+                replace_words.append(words[j])
+            if replace_words:
+                replace_exercise = " ".join(replace_words).title()
 
     if not muscle_gain and (calories is None or duration is None):
         return None, None, None, None, None, "Missing required information (calories, duration)."
@@ -107,17 +121,11 @@ def modify_workout(workout_plan, remove_exercise, replace_exercise, calorie_burn
     modified_plan = []
     for entry in workout_plan:
         if remove_exercise and remove_exercise.lower() in entry.lower():
-            if replace_exercise:
-                new_exercise = replace_exercise
-                # Case-insensitive replace
-                pattern = re.compile(re.escape(remove_exercise), re.IGNORECASE)
-                entry = pattern.sub(new_exercise, entry)
-                modified_plan.append(entry)
-            # If no replacement, skip the entry (i.e. remove it)
-        else:
-            modified_plan.append(entry)
+            new_exercise = replace_exercise or random.choice(list(calorie_burn_exercises.keys()))
+            pattern = re.compile(re.escape(remove_exercise), re.IGNORECASE)
+            entry = pattern.sub(new_exercise, entry)
+        modified_plan.append(entry)
     return modified_plan
-
 
 @app.route('/generate_workout', methods=['POST'])
 def generate_workout_api():
