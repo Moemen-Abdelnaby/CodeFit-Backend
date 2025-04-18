@@ -107,9 +107,13 @@ def modify_workout(workout_plan, remove_exercise, replace_exercise, calorie_burn
     modified_plan = []
     for entry in workout_plan:
         if remove_exercise and remove_exercise in entry:
-            new_exercise = replace_exercise or random.choice(list(calorie_burn_exercises.keys()))
-            entry = entry.replace(remove_exercise, new_exercise)
-        modified_plan.append(entry)
+            if replace_exercise:
+                new_exercise = replace_exercise
+                entry = entry.replace(remove_exercise, new_exercise)
+                modified_plan.append(entry)
+            # If no replacement, remove the exercise (skip this entry)
+        else:
+            modified_plan.append(entry)
     return modified_plan
 
 @app.route('/generate_workout', methods=['POST'])
