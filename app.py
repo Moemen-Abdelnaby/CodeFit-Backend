@@ -106,15 +106,18 @@ def generate_workout(calories, duration, calorie_burn_exercises, muscle_gain_exe
 def modify_workout(workout_plan, remove_exercise, replace_exercise, calorie_burn_exercises, muscle_gain_exercises):
     modified_plan = []
     for entry in workout_plan:
-        if remove_exercise and remove_exercise in entry:
+        if remove_exercise and remove_exercise.lower() in entry.lower():
             if replace_exercise:
                 new_exercise = replace_exercise
-                entry = entry.replace(remove_exercise, new_exercise)
+                # Case-insensitive replace
+                pattern = re.compile(re.escape(remove_exercise), re.IGNORECASE)
+                entry = pattern.sub(new_exercise, entry)
                 modified_plan.append(entry)
-            # If no replacement, remove the exercise (skip this entry)
+            # If no replacement, skip the entry (i.e. remove it)
         else:
             modified_plan.append(entry)
     return modified_plan
+
 
 @app.route('/generate_workout', methods=['POST'])
 def generate_workout_api():
