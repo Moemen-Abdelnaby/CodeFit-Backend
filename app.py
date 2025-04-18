@@ -167,19 +167,35 @@ def modify_workout_api():
     data = request.get_json()
     logger.debug(f"[{request_id}] Received /modify_workout: {data}")
 
-    modification = data.get("modification", "")
-    current_plan = data.get("current_plan", [])
+    try:
+        modification = data.get("modification", "")
+        current_plan = data.get("current_plan", [])
 
-    if not modification or not current_plan:
+        if not modification or not current_plan:
+            return jsonify({
+                "error": "Missing 'modification' or 'current_plan'",
+                "request_id": request_id
+            }), 400
+
+        _, _, _, remove_exercise, replace_exercise, _ = parse_user_input(modification)
+
+        modified_plan = modify_workout(
+            current_plan,
+            remove_exercise,
+            replace_exercise,
+            calorie_burn_exercises,
+            muscle_gain_exercises
+        )
+
+        return jsonify({"modified_plan": modified_plan, "request_id": request_id})
+
+    except Exception as e:
+        logger.exception(f"[{request_id}] Error occurred during modification:")
         return jsonify({
-            "error": "Missing 'modification' or 'current_plan'",
+            "error": str(e),
             "request_id": request_id
-        }), 400
+        }), 500
 
-    _, _, _, remove_exercise, replace_exercise, _ = parse_user_input(modification)
-    modified_plan = modify_workout(current_plan, remove_exercise, replace_exercise, calorie_burn_exercises, muscle_gain_exercises)
-
-    return jsonify({"modified_plan": modified_plan, "request_id": request_id})
 
 @app.route('/', methods=['GET'])
 def index():
