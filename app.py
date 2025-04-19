@@ -93,8 +93,9 @@ def parse_user_input(user_input):
             if replace_words:
                 replace_exercise = " ".join(replace_words).title()
 
-    if not muscle_gain and (calories is None or duration is None):
-        return None, None, None, None, None, "Missing required information (calories, duration)."
+    # Modified logic: allow remove/replace even without calories/duration
+    if not muscle_gain and (calories is None or duration is None) and not (remove_exercise or replace_exercise):
+        return None, None, None, None, None, "Missing required information (calories, duration) or modification intent."
 
     return calories, duration, muscle_gain, remove_exercise, replace_exercise, None
 
@@ -138,10 +139,14 @@ def modify_existing_workout(workout_plan, remove_exercise, replace_exercise, cal
             current_exercise = entry.split(" - ")[0].strip()
 
         if remove_exercise and current_exercise.lower() == remove_exercise.lower():
-            new_exercise = replace_exercise or random.choice(list(calorie_burn_exercises.keys()))
-            entry = re.sub(re.escape(current_exercise), new_exercise, entry, flags=re.IGNORECASE)
+            if not replace_exercise:
+                all_exercises = list(calorie_burn_exercises.keys()) + list(muscle_gain_exercises.keys())
+                all_exercises = [e for e in all_exercises if e.lower() != current_exercise.lower()]
+                replace_exercise = random.choice(all_exercises)
+            entry = re.sub(re.escape(current_exercise), replace_exercise, entry, flags=re.IGNORECASE)
 
-        modified_plan.append(entry)
+        elif not remove_exercise or current_exercise.lower() != remove_exercise.lower():
+            modified_plan.append(entry)
 
     return modified_plan
 
