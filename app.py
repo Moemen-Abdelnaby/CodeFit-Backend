@@ -151,14 +151,15 @@ def modify_existing_workout(workout_plan, remove_exercise, replace_exercise, cal
     modified_plan = []
     all_exercises = list(set(calorie_burn_exercises.keys()) | set(muscle_gain_exercises.keys()))
 
-    # Track all current exercises in the plan (case-insensitive)
-    current_exercises = set()
-    for entry in workout_plan:
-        match = re.search(r'of (.+?) \(', entry)
-        if match:
-            current_exercises.add(match.group(1).strip().lower())
-        else:
-            current_exercises.add(entry.split(" - ")[0].strip().lower())
+    def get_current_plan_exercises():
+        exercises = set()
+        for item in modified_plan:
+            match = re.search(r'of (.+?) \(', item)
+            if match:
+                exercises.add(match.group(1).strip().lower())
+            else:
+                exercises.add(item.split(" - ")[0].strip().lower())
+        return exercises
 
     for entry in workout_plan:
         match = re.search(r'of (.+?) \(', entry)
@@ -170,28 +171,26 @@ def modify_existing_workout(workout_plan, remove_exercise, replace_exercise, cal
         is_match = remove_exercise and current_exercise.lower() == remove_exercise.lower()
 
         if is_match:
-            # Handle replace
             if replace_exercise:
                 replacement = replace_exercise
             else:
-                # Exclude current workout exercises and the one being replaced
+                current_plan_exercises = get_current_plan_exercises()
                 replacement_choices = [
                     e for e in all_exercises
                     if e.lower() != current_exercise.lower()
-                    and e.lower() not in current_exercises
+                    and e.lower() not in current_plan_exercises
                 ]
                 if not replacement_choices:
-                    continue  # Nothing to replace with
+                    continue  # No valid replacement, skip this exercise
                 replacement = random.choice(replacement_choices)
 
-            # Replace and add new exercise
             entry = re.sub(re.escape(current_exercise), replacement, entry, flags=re.IGNORECASE)
             modified_plan.append(entry)
-            current_exercises.add(replacement.lower())  # Update set to prevent reuse
         else:
             modified_plan.append(entry)
 
     return modified_plan
+
 
 
 
