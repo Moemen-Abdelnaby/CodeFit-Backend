@@ -98,37 +98,7 @@ def parse_user_input(user_input):
 
     return calories, duration, muscle_gain, remove_exercise, replace_exercise, None
 
-def generate_workout(calories, duration, calorie_burn_exercises, muscle_gain_exercises, muscle_gain):
-    workout_plan = []
-    total_calories = 0
-    total_time = 0
-
-    if muscle_gain:
-        for exercise, muscle_group in muscle_gain_exercises.items():
-            workout_plan.append(f"{exercise} - Focus on {muscle_group}, 3 sets of 10 reps")
-    else:
-        while total_time < duration:
-            exercise, burn_rate = random.choice(list(calorie_burn_exercises.items()))
-            time_for_exercise = min(duration - total_time, random.randint(5, 15))
-            calories_burned = (calories / duration) * time_for_exercise
-            workout_plan.append(f"{time_for_exercise} min of {exercise} (~{int(calories_burned)} cal)")
-            total_calories += calories_burned
-            total_time += time_for_exercise
-
-    return workout_plan
-
-def modify_workout(workout_plan, remove_exercise, replace_exercise, calorie_burn_exercises, muscle_gain_exercises):
-    modified_plan = []
-    for entry in workout_plan:
-        if remove_exercise and remove_exercise.lower() in entry.lower():
-            new_exercise = replace_exercise or random.choice(list(calorie_burn_exercises.keys()))
-            pattern = re.compile(re.escape(remove_exercise), re.IGNORECASE)
-            entry = pattern.sub(new_exercise, entry)
-        modified_plan.append(entry)
-    return modified_plan
-
-@app.route('/generate_workout', methods=['POST'])
-def generate_workout(calories, duration, calorie_burn_exercises, muscle_gain_exercises, muscle_gain, exclude=None):
+def build_workout(calories, duration, calorie_burn_exercises, muscle_gain_exercises, muscle_gain, exclude=None):
     workout_plan = []
     total_calories = 0
     total_time = 0
@@ -157,27 +127,78 @@ def generate_workout(calories, duration, calorie_burn_exercises, muscle_gain_exe
 
     return workout_plan
 
-
-@app.route('/modify_workout', methods=['POST'])
-def modify_workout(workout_plan, remove_exercise, replace_exercise, calorie_burn_exercises, muscle_gain_exercises):
+def modify_existing_workout(workout_plan, remove_exercise, replace_exercise, calorie_burn_exercises, muscle_gain_exercises):
     modified_plan = []
 
     for entry in workout_plan:
-        # Extract exercise name from the format: "X min of Exercise Name (~Y cal)"
         match = re.search(r'of (.+?) \(', entry)
         if match:
             current_exercise = match.group(1).strip()
         else:
-            current_exercise = entry.split(" - ")[0].strip()  # For muscle gain format
+            current_exercise = entry.split(" - ")[0].strip()
 
         if remove_exercise and current_exercise.lower() == remove_exercise.lower():
             new_exercise = replace_exercise or random.choice(list(calorie_burn_exercises.keys()))
-            # Substitute the exact exercise name in context
             entry = re.sub(re.escape(current_exercise), new_exercise, entry, flags=re.IGNORECASE)
 
         modified_plan.append(entry)
 
     return modified_plan
+
+@app.route('/generate_workout', methods=['POST'])
+def generate_workout_api():
+    request_id = str(uuid.uuid4())
+    data = request.get_json()
+    logger.debug(f"[{request_id}] Received /generate_workout: {data}")
+
+    goal = data.get("goal", "")
+    if not goal:
+        return jsonify({"error": "Missing 'goal'", "request_id": request_id}), 400
+
+    calories, duration, muscle_gain, remove_exercise, replace_exercise, error = parse_user_input(goal)
+    if error:
+        return jsonify({"error": error, "request_id": request_id}), 400
+
+    workout_plan = build_workout(
+        calories,
+        duration,
+        calorie_burn_exercises,
+        muscle_gain_exercises,
+        muscle_gain,
+        exclude=remove_exercise
+    )
+
+    if remove_exercise or replace_exercise:
+        workout_plan = modify_existing_workout(
+            workout_plan,
+            remove_exercise,
+            replace_exercise,
+            calorie_burn_exercises,
+            muscle_gain_exercises
+        )
+
+    return jsonify({"workout_plan": workout_plan, "request_id": request_id})
+
+@app.route('/modify_workout', methods=['POST'])
+def modify_workout_api():
+    data = request.get_json()
+    workout_plan = data.get("current_plan", [])
+    user_input = data.get("modification", "")
+
+    calories, duration, muscle_gain, remove_exercise, replace_exercise, error = parse_user_input(user_input)
+    if error:
+        return jsonify({"error": error}), 400
+
+    modified_plan = modify_existing_workout(
+        workout_plan,
+        remove_exercise,
+        replace_exercise,
+        calorie_burn_exercises,
+        muscle_gain_exercises
+    )
+
+    return jsonify({"modified_plan": modified_plan})
+
 @app.route('/', methods=['GET'])
 def index():
     return "CodeFit Backend is running ✅"
