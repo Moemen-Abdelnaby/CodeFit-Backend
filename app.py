@@ -91,9 +91,20 @@ def parse_user_input(user_input):
                     break
                 replace_words.append(words[j])
             if replace_words:
-                replace_exercise = " ".join(replace_words).title()
+                remove_exercise = " ".join(replace_words).title()
 
-    # Modified logic: allow remove/replace even without calories/duration
+            # Check for replacement word
+            if "with" in words[i:]:
+                with_index = words.index("with", i)
+                replacement = []
+                for k in range(with_index + 1, len(words)):
+                    if words[k] in ["remove", "replace", "and"]:
+                        break
+                    replacement.append(words[k])
+                if replacement:
+                    replace_exercise = " ".join(replacement).title()
+
+    # Allow modifications even without calories/duration
     if not muscle_gain and (calories is None or duration is None) and not (remove_exercise or replace_exercise):
         return None, None, None, None, None, "Missing required information (calories, duration) or modification intent."
 
@@ -118,18 +129,27 @@ def build_workout(calories, duration, calorie_burn_exercises, muscle_gain_exerci
         if not available_exercises:
             return ["No available exercises after filtering out unwanted ones."]
 
-        while total_time < duration:
-            exercise, burn_rate = random.choice(list(available_exercises.items()))
+        exercise_list = list(available_exercises.items())
+        random.shuffle(exercise_list)
+
+        index = 0
+        while total_time < duration and index < len(exercise_list):
+            exercise, burn_rate = exercise_list[index]
             time_for_exercise = min(duration - total_time, random.randint(5, 15))
             calories_burned = (calories / duration) * time_for_exercise
             workout_plan.append(f"{time_for_exercise} min of {exercise} (~{int(calories_burned)} cal)")
             total_calories += calories_burned
             total_time += time_for_exercise
+            index += 1
+
+        if total_time < duration:
+            workout_plan.append(f"(Time left: {duration - total_time} min — no more unique exercises available)")
 
     return workout_plan
 
 def modify_existing_workout(workout_plan, remove_exercise, replace_exercise, calorie_burn_exercises, muscle_gain_exercises):
     modified_plan = []
+    all_exercises = list(calorie_burn_exercises.keys()) + list(muscle_gain_exercises.keys())
 
     for entry in workout_plan:
         match = re.search(r'of (.+?) \(', entry)
@@ -139,14 +159,13 @@ def modify_existing_workout(workout_plan, remove_exercise, replace_exercise, cal
             current_exercise = entry.split(" - ")[0].strip()
 
         if remove_exercise and current_exercise.lower() == remove_exercise.lower():
+            # Choose random replacement if not specified
             if not replace_exercise:
-                all_exercises = list(calorie_burn_exercises.keys()) + list(muscle_gain_exercises.keys())
-                all_exercises = [e for e in all_exercises if e.lower() != current_exercise.lower()]
-                replace_exercise = random.choice(all_exercises)
+                replacement_choices = [e for e in all_exercises if e.lower() != remove_exercise.lower()]
+                replace_exercise = random.choice(replacement_choices)
             entry = re.sub(re.escape(current_exercise), replace_exercise, entry, flags=re.IGNORECASE)
 
-        elif not remove_exercise or current_exercise.lower() != remove_exercise.lower():
-            modified_plan.append(entry)
+        modified_plan.append(entry)
 
     return modified_plan
 
