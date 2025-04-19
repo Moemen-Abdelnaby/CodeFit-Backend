@@ -151,37 +151,6 @@ def generate_workout_api():
 def modify_workout(workout_plan, remove_exercise, replace_exercise, calorie_burn_exercises, muscle_gain_exercises):
     modified_plan = []
 
-<<<<<<< HEAD
-    try:
-        modification = data.get("modification", "")
-        current_plan = data.get("current_plan", [])
-
-        if not modification or not current_plan:
-            return jsonify({
-                "error": "Missing 'modification' or 'current_plan'",
-                "request_id": request_id
-            }), 400
-
-        _, _, _, remove_exercise, replace_exercise, _ = parse_user_input(modification)
-
-        modified_plan = modify_workout(
-            current_plan,
-            remove_exercise,
-            replace_exercise,
-            calorie_burn_exercises,
-            muscle_gain_exercises
-        )
-
-        return jsonify({"modified_plan": modified_plan, "request_id": request_id})
-
-    except Exception as e:
-        logger.exception(f"[{request_id}] Error occurred during modification:")
-        return jsonify({
-            "error": str(e),
-            "request_id": request_id
-        }), 500
-
-=======
     for entry in workout_plan:
         # Extract exercise name from the format: "X min of Exercise Name (~Y cal)"
         match = re.search(r'of (.+?) \(', entry)
@@ -196,7 +165,6 @@ def modify_workout(workout_plan, remove_exercise, replace_exercise, calorie_burn
             entry = re.sub(re.escape(current_exercise), new_exercise, entry, flags=re.IGNORECASE)
 
         modified_plan.append(entry)
->>>>>>> 7b92adcac4e8509d7d7263fb5efc9feaa0340354
 
     return modified_plan
 @app.route('/', methods=['GET'])
