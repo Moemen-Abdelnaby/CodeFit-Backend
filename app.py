@@ -159,15 +159,17 @@ def modify_existing_workout(workout_plan, remove_exercise, replace_exercise, cal
             current_exercise = entry.split(" - ")[0].strip()
 
         if remove_exercise and current_exercise.lower() == remove_exercise.lower():
-            # Choose random replacement if not specified
-            if not replace_exercise:
-                replacement_choices = [e for e in all_exercises if e.lower() != remove_exercise.lower()]
-                replace_exercise = random.choice(replacement_choices)
-            entry = re.sub(re.escape(current_exercise), replace_exercise, entry, flags=re.IGNORECASE)
-
-        modified_plan.append(entry)
+            if replace_exercise:
+                entry = re.sub(re.escape(current_exercise), replace_exercise, entry, flags=re.IGNORECASE)
+                modified_plan.append(entry)
+            else:
+                # Remove this workout by skipping it
+                continue
+        else:
+            modified_plan.append(entry)
 
     return modified_plan
+
 
 @app.route('/generate_workout', methods=['POST'])
 def generate_workout_api():
