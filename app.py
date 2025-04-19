@@ -149,7 +149,7 @@ def build_workout(calories, duration, calorie_burn_exercises, muscle_gain_exerci
 
 def modify_existing_workout(workout_plan, remove_exercise, replace_exercise, calorie_burn_exercises, muscle_gain_exercises):
     modified_plan = []
-    all_exercises = list(calorie_burn_exercises.keys()) + list(muscle_gain_exercises.keys())
+    all_exercises = list(set(calorie_burn_exercises.keys()) | set(muscle_gain_exercises.keys()))
 
     for entry in workout_plan:
         match = re.search(r'of (.+?) \(', entry)
@@ -159,14 +159,25 @@ def modify_existing_workout(workout_plan, remove_exercise, replace_exercise, cal
             current_exercise = entry.split(" - ")[0].strip()
 
         if remove_exercise and current_exercise.lower() == remove_exercise.lower():
-            if not replace_exercise:
+            # Decide what to do per entry
+            if replace_exercise:
+                replacement = replace_exercise
+            else:
+                # Pick a new random one each time
                 replacement_choices = [e for e in all_exercises if e.lower() != remove_exercise.lower()]
-                replace_exercise = random.choice(replacement_choices)
-            entry = re.sub(re.escape(current_exercise), replace_exercise, entry, flags=re.IGNORECASE)
-        
-        modified_plan.append(entry)
+                if not replacement_choices:
+                    continue  # If none are available, just skip
+                replacement = random.choice(replacement_choices)
+
+            # Replace inside text
+            entry = re.sub(re.escape(current_exercise), replacement, entry, flags=re.IGNORECASE)
+            modified_plan.append(entry)
+        elif not (remove_exercise and current_exercise.lower() == remove_exercise.lower()):
+            # Keep everything else
+            modified_plan.append(entry)
 
     return modified_plan
+
 
 
 
