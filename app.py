@@ -151,6 +151,15 @@ def modify_existing_workout(workout_plan, remove_exercise, replace_exercise, cal
     modified_plan = []
     all_exercises = list(set(calorie_burn_exercises.keys()) | set(muscle_gain_exercises.keys()))
 
+    # Track current exercises to avoid duplicates
+    current_exercises = set()
+    for entry in workout_plan:
+        match = re.search(r'of (.+?) \(', entry)
+        if match:
+            current_exercises.add(match.group(1).strip().lower())
+        else:
+            current_exercises.add(entry.split(" - ")[0].strip().lower())
+
     for entry in workout_plan:
         match = re.search(r'of (.+?) \(', entry)
         if match:
@@ -159,24 +168,25 @@ def modify_existing_workout(workout_plan, remove_exercise, replace_exercise, cal
             current_exercise = entry.split(" - ")[0].strip()
 
         if remove_exercise and current_exercise.lower() == remove_exercise.lower():
-            # Decide what to do per entry
             if replace_exercise:
                 replacement = replace_exercise
             else:
-                # Pick a new random one each time
-                replacement_choices = [e for e in all_exercises if e.lower() != remove_exercise.lower()]
+                # Filter out both the one being removed AND those already in the plan
+                replacement_choices = [e for e in all_exercises
+                                       if e.lower() != remove_exercise.lower()
+                                       and e.lower() not in current_exercises]
                 if not replacement_choices:
-                    continue  # If none are available, just skip
+                    continue  # Nothing to replace with
                 replacement = random.choice(replacement_choices)
+                current_exercises.add(replacement.lower())  # Add to avoid future duplication
 
-            # Replace inside text
             entry = re.sub(re.escape(current_exercise), replacement, entry, flags=re.IGNORECASE)
             modified_plan.append(entry)
         elif not (remove_exercise and current_exercise.lower() == remove_exercise.lower()):
-            # Keep everything else
             modified_plan.append(entry)
 
     return modified_plan
+
 
 
 
